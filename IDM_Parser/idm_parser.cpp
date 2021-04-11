@@ -14,6 +14,7 @@ int main() {
 	SetConsoleOutputCP(1251);
 	SetConsoleCP(1251);
 
+	cout << "IDM Parser v. 1.0.0\n";
 	cout << "Введите HELP для вывода списка команд\n";
 	Query q;
 	cin >> q;
@@ -36,7 +37,7 @@ int main() {
 			OpenSession();
 			break;
 		default:
-			cout << "Неверная команда!" << "\n";
+			cout << "Неверная команда! " << "\n";
 			break;
 		}
 		cin >> q;
