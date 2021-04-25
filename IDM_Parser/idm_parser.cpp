@@ -14,7 +14,7 @@ int main() {
 	SetConsoleOutputCP(1251);
 	SetConsoleCP(1251);
 
-	cout << "IDM Parser v. 1.0.0\n";
+	cout << "IDM Parser v. 1.0.1 WinXP Edition\n";
 	cout << "¬ведите HELP дл€ вывода списка команд\n";
 	Query q;
 	cin >> q;
