@@ -340,4 +340,4 @@ ASALocalRun/
 healthchecksdb
 
 #Test folder
-IDM_Parser/test_folder/
+/IDM_Parser/test_folder/*
