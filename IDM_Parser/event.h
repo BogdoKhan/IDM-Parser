@@ -6,8 +6,12 @@
 
 
 enum class Detector {
-	SCINT,
-	NEUTRON,
+	SCINT11,
+	SCINT12,
+	NEUTRON1,
+	SCINT21,
+	SCINT22,
+	NEUTRON2,
 	UNUSED
 };
 
@@ -43,19 +47,19 @@ public:
 	CollectionOfEvents(const std::pair<size_t, std::vector<Event>>& col);
 	std::vector<double> neutr_time();
 	std::vector<double> scint_time();
-	std::vector<Event> Neutr_events() const;
-	std::vector<Event> Scint_events() const;
+	std::map<Detector, std::vector<Event>> Neutr_events() const;
+	std::map<Detector, std::vector<Event>> Scint_events() const;
 	size_t Shot();
-	size_t Neutrons();
+	std::map <Detector, size_t> Neutrons();
 	size_t Scint();
-	double Trig();
+	std::map <Detector, double> Trig();
 private:
 	size_t _shot = 0; //first member of pair
-	size_t _num_neutron = 0; //if Detector::NEUTRON ++num_neutron
+	std::map <Detector, size_t> _num_neutron = { {Detector::NEUTRON1, 0}, {Detector::NEUTRON2, 0} }; //if Detector::NEUTRON ++num_neutron
 	size_t _num_scint = 0; //if Detector::SCINT ++num_neutron
-	double _trigger_time = 0; //make bool, if found, initialize
+	std::map <Detector, double> _trigger_time = { {Detector::NEUTRON1, 0}, {Detector::NEUTRON2, 0} }; //make bool, if found, initialize
 	//make common vectors for times & amplitudes
-	std::vector<Event> neutr_events;
-	std::vector<Event> scint_events;
+	std::map<Detector, std::vector<Event>> neutr_events;
+	std::map<Detector, std::vector<Event>> scint_events;
 };
 
