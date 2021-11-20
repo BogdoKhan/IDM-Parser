@@ -61,8 +61,8 @@ IDI_ICON1               ICON                    "icon1.ico"
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 1,0,3,0
- PRODUCTVERSION 1,0,3,0
+ FILEVERSION 1,0,2,0
+ PRODUCTVERSION 1,0,2,0
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -78,13 +78,13 @@ BEGIN
         BLOCK "041904b0"
         BEGIN
             VALUE "CompanyName", "Daniil Chumakov"
-            VALUE "FileDescription", "Tool for analysis of neutron detectors & IDM-40 accelerator output files "
-            VALUE "FileVersion", "1.0.3.0"
+            VALUE "FileDescription", "Tool for analysis of IDM-40 accelerator output files"
+            VALUE "FileVersion", "1.0.2.0"
             VALUE "InternalName", "IDM_Parser.exe"
             VALUE "LegalCopyright", "Copyright (C) 2021"
             VALUE "OriginalFilename", "IDM_Parser.exe"
             VALUE "ProductName", "IDM Parser Win Edition"
-            VALUE "ProductVersion", "1.0.3.0"
+            VALUE "ProductVersion", "1.0.2.0"
         END
     END
     BLOCK "VarFileInfo"

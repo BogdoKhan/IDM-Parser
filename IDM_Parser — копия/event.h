@@ -2,7 +2,6 @@
 #include <vector>
 #include <iostream>
 #include <string>
-#include <algorithm>
 #include <map>
 
 
@@ -48,22 +47,24 @@ public:
 	CollectionOfEvents(const std::pair<size_t, std::vector<Event>>& col,
 		const double& lowerbnd, const double& upperbnd);
 
-	std::map<std::string, std::vector<double>> neutr_time();
+	std::vector<double> neutr_time();
+	std::vector<double> neutr_time_OOR();
 
 	std::vector<double> scint_time();
 
-	std::map<std::string, std::map<Detector, std::vector<Event>>> Neutr_events() const;
+	std::map<Detector, std::vector<Event>> Neutr_events() const;
+	std::map<Detector, std::vector<Event>> Neutr_events_OOR() const;
 
 	std::map<Detector, std::vector<Event>> Scint_events() const;
 	size_t Shot();
-	std::map <std::string, std::map <Detector, size_t>> Neutrons();
+	std::map <Detector, size_t> Neutrons();
+	std::map <Detector, size_t> Neutrons_OOR();
 
 	size_t Scint();
-	double Trig();
+	std::map <Detector, double> Trig();
 private:
 	size_t _shot = 0; //first member of pair
 
-	//---------------------------------------------------------
 	//maps of neutron multiplicities
 	std::map <Detector, size_t> _num_neutron = {
 		{Detector::NEUTRON1, 0}, {Detector::NEUTRON2, 0} 
@@ -80,15 +81,12 @@ private:
 	std::map <Detector, size_t> _num_neutron_CRPT = {
 	{Detector::NEUTRON1, 0}, {Detector::NEUTRON2, 0}
 	}; //if Detector::NEUTRON AND below threshold ++num_neutron
-	//---------------------------------------------------------
 
-	size_t _num_scint = 0; //if Detector::SCINT ++num_scint
+	size_t _num_scint = 0; //if Detector::SCINT ++num_neutron
 
 	std::map <Detector, double> _trigger_time = {
 		{Detector::NEUTRON1, 0}, {Detector::NEUTRON2, 0} 
 	}; //make bool, if found, initialize HELPS to find trigger time and set zero to histos
-
-	double _trigger_time_start = 0;
 
 	//make common vectors for times & amplitudes
 	std::map<Detector, std::vector<Event>> neutr_events; //all events

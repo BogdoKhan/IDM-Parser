@@ -1,8 +1,6 @@
 #include "commands.h"
 #include "files.h"
 
-#include <iomanip>
-
 using namespace std;
 namespace fs = std::filesystem;
 
@@ -70,8 +68,6 @@ void ShowHelp() {
 	cout << "list, LIST - shows the list of files in specified directory\n";
 	cout << "cd, CD, CHDIR - changes the working directory\n";
 	cout << "mkdir, MKDIR - creates a new directory\n";
-	cout << "sb, SETB - set boundary values for data processing";
-	cout << "shb, SHOWB - show boundary values for data processing";
 	cout << "help, HELP - shows the help\n";
 	cout << "an, ANALYZE - analyze the file\n";
 	cout << "---------------------------------------------------\n";
@@ -146,16 +142,7 @@ void OpenSession(const double& lowerbnd, const double& upperbnd) {
 			ofstream hTimeS(mypath.stem().string() + "\\hTimeS.txt", ios::trunc);
 			ofstream fileMultN(mypath.stem().string() + "\\fileMultiNeutron.txt", ios::trunc);
 			ofstream hSpectrN(mypath.stem().string() + "\\hSpectrN.txt", ios::trunc);
-			ofstream hSpectrNR(mypath.stem().string() + "\\hSpectrNRange.txt", ios::trunc);
 
-			double SessionTime = 1;
-
-			cout << "---------------------------------------------------\n";
-			cout << "Введите длительность сессии в секундах (для пропуска введите 1):\n";
-			cin >> SessionTime;
-			cin.clear();
-			cin.ignore(10, '\n');
-			cout << "Длительность сессии: " << SessionTime << " секунд\n";
 			cout << "---------------------------------------------------\n";
 			cout << "Начат анализ файла.\n";
 
@@ -163,61 +150,33 @@ void OpenSession(const double& lowerbnd, const double& upperbnd) {
 			vector<double> TimesForNeutrons;
 			vector<double> TimesForScint;
 			vector<double> SpectrumNeutrons;
-			vector<double> SpectrumNeutronsRange;
 
 			map<size_t, size_t> Cluster;
 			map<size_t, size_t> AC_Cluster; //anti-coincidence cluster
 			map<size_t, size_t> clr_Cluster; //without anti-coincident
 
-			map<string, size_t> map_neutrons;
-			map<string, size_t> nNeutrons = {
-					{"TOTAL", 0}, {"RANGE", 0}, {"OOR", 0}, {"CRPT", 0}
-			};
+			size_t nNeutrons25 = 0;
+			size_t nNeutrons = 0;
 			size_t nScint = 0;
 			size_t nAC = 0;
 			size_t nAC_n = 0;
-			size_t nAC_range = 0;
 			//Fill collection of times for neutron and scint detectors, find their number
 			for (const auto& event_ : events) {
-				//take Nth key (# of shot) with vector of events in Nth shot
 				CollectionOfEvents col(event_, lowerbnd, upperbnd);
-				//number of neutrons in event, neutrons in range, out of range & from corrupted events
-				map<string, size_t> NeutronsInEvent = {
-					{"TOTAL", 0}, {"RANGE", 0}, {"OOR", 0}, {"CRPT", 0}
-				};
-				for (auto& item : NeutronsInEvent) {
-					NeutronsInEvent.at(item.first) = col.Neutrons().at(item.first).at(Detector::NEUTRON1) 
-						+ col.Neutrons().at(item.first).at(Detector::NEUTRON2);
-				}
+				//number of neutrons in event
+				size_t NeutronsInEvent = col.Neutrons().at(Detector::NEUTRON1) + col.Neutrons().at(Detector::NEUTRON2);
+				size_t NeutronsInEvent_wRange = 
 
 
-				if (NeutronsInEvent.at("TOTAL") > 0) {
-					//put times into vector for neutron times histogram
-					vector<double> col_nt = col.neutr_time().at("RANGE");
+				if (NeutronsInEvent > 0) {
+					vector<double> col_nt = col.neutr_time();
 					TimesForNeutrons.insert(TimesForNeutrons.end(), col_nt.begin(), col_nt.end());
-					//add number of neutrons for every case
-					for (const auto& item : NeutronsInEvent) {
-						if (item.first == "RANGE" &&
-							col.Neutrons().at("CRPT").at(Detector::NEUTRON1) == 0 &&
-							col.Neutrons().at("CRPT").at(Detector::NEUTRON2) == 0 && col.Trig() > 0) {
-							nNeutrons.at(item.first) += item.second;
-						}
-						else if (item.first == "RANGE") {
-							nNeutrons.at("CRPT") += item.second;
-						}
-						else {
-							nNeutrons.at(item.first) += item.second;
-						}
-
+					nNeutrons += NeutronsInEvent;
+					if (col.Neutrons().at(Detector::NEUTRON1) > 0) {
+						Cluster[col.Neutrons().at(Detector::NEUTRON1)]++;
 					}
-					if ((col.Neutrons().at("RANGE").at(Detector::NEUTRON1) > 0 ||
-						col.Neutrons().at("RANGE").at(Detector::NEUTRON2) > 0) &&
-						col.Neutrons().at("CRPT").at(Detector::NEUTRON1) == 0 &&
-						col.Neutrons().at("CRPT").at(Detector::NEUTRON2) == 0 && col.Trig() > 0) {
-
-						Cluster[(col.Neutrons().at("RANGE").at(Detector::NEUTRON1) +
-							col.Neutrons().at("RANGE").at(Detector::NEUTRON2))]++;
-
+					if (col.Neutrons().at(Detector::NEUTRON2) > 0) {
+						Cluster[col.Neutrons().at(Detector::NEUTRON2)]++;
 					}
 
 					//Fill table of registered anti-coincident neutron events
@@ -229,106 +188,66 @@ void OpenSession(const double& lowerbnd, const double& upperbnd) {
 						//Triggers, if the event has been already marked as anti-coincident
 
 						for (const auto& vec : col.Scint_events()) {
-							if (!trig1 && !trig2 && vec.first == Detector::SCINT11) {
+							if (!trig1 && !trig2 && (vec.first == Detector::SCINT21 || vec.first == Detector::SCINT22) ) {
+								det = Detector::NEUTRON2;
 								for (const auto& item : vec.second) {
-									if ((item.Time() - col.Trig() < 200.0) && (item.Time() - col.Trig() > 0)) {
-
-										if (col.Scint() >= 1
-											&& col.Neutrons().at("RANGE").at(Detector::NEUTRON2) >= 1
-											&& col.Neutrons().at("RANGE").at(Detector::NEUTRON2) >= 1) {
-
-											AC_Cluster[
-												(col.Neutrons().at("RANGE").at(Detector::NEUTRON1) +
-													col.Neutrons().at("RANGE").at(Detector::NEUTRON2))]++;
-
-											nAC_n += col.Neutrons().at("RANGE").at(Detector::NEUTRON1);
-											nAC_n += col.Neutrons().at("RANGE").at(Detector::NEUTRON2);
-											nAC_range++;
+									if ((item.Time() - col.Trig().at(det) < 100.0) && (item.Time() - col.Trig().at(det) > 0)) {
+										if (col.Scint() > 1 || (col.Scint() <= 1 && col.Neutrons().at(Detector::NEUTRON2) == 1)) {
+											AC_Cluster[col.Neutrons().at(Detector::NEUTRON2)]++;
+											nAC_n += col.Neutrons().at(Detector::NEUTRON2);
 										}
-
-										else if (col.Scint() >= 1 && col.Neutrons().at("RANGE").at(Detector::NEUTRON2) >= 1) {
-
-											AC_Cluster[col.Neutrons().at("RANGE").at(Detector::NEUTRON2)]++;
-
-											nAC_n += col.Neutrons().at("RANGE").at(Detector::NEUTRON2);
-											nAC_range++;
+										else if (col.Neutrons().at(Detector::NEUTRON2) > 1) {
+											AC_Cluster[col.Neutrons().at(Detector::NEUTRON2)]++;
+											nAC_n += col.Neutrons().at(Detector::NEUTRON2);
+											AC_Cluster[col.Neutrons().at(Detector::NEUTRON2) - 1]--;
+											nAC_n -= (col.Neutrons().at(Detector::NEUTRON2) - 1);
 										}
-										else if (col.Scint() >= 1 && col.Neutrons().at("RANGE").at(Detector::NEUTRON1) >= 1) {
+										nAC++;
+										trig2 = true;
+									}
+								}
+							}
 
-											AC_Cluster[col.Neutrons().at("RANGE").at(Detector::NEUTRON1)]++;
-
-											nAC_n += col.Neutrons().at("RANGE").at(Detector::NEUTRON1);
-											nAC_range++;
+							else if (!trig1 && !trig2 && (vec.first == Detector::SCINT11 || vec.first == Detector::SCINT12)) {
+								det = Detector::NEUTRON1;
+								for (const auto& item : vec.second) {
+									if ((item.Time() - col.Trig().at(det) < 100.0) && (item.Time() - col.Trig().at(det) > 0)) {
+										if (col.Scint() > 1 || (col.Scint() <= 1 && col.Neutrons().at(Detector::NEUTRON1) == 1)) {
+											AC_Cluster[col.Neutrons().at(Detector::NEUTRON1)]++;
+											nAC_n += col.Neutrons().at(Detector::NEUTRON1);
+										}
+										else if (col.Scint() == 1 && col.Neutrons().at(Detector::NEUTRON1) > 1) {
+											AC_Cluster[col.Neutrons().at(Detector::NEUTRON1)]++;
+											nAC_n += col.Neutrons().at(Detector::NEUTRON1);
+											AC_Cluster[col.Neutrons().at(Detector::NEUTRON1) - 1]--;
+											nAC_n -= (col.Neutrons().at(Detector::NEUTRON1) - 1);
 										}
 										nAC++;
 										trig1 = true;
 									}
 								}
 							}
-
-							else if (!trig1 && !trig2 && vec.first == Detector::SCINT12) {
-								for (const auto& item : vec.second) {
-									if ((item.Time() - col.Trig() < 200.0) && (item.Time() - col.Trig() > 0)) {
-										if (col.Scint() >= 1
-											&& col.Neutrons().at("RANGE").at(Detector::NEUTRON2) >= 1
-											&& col.Neutrons().at("RANGE").at(Detector::NEUTRON2) >= 1) {
-											AC_Cluster[
-												(col.Neutrons().at("RANGE").at(Detector::NEUTRON1) +
-													col.Neutrons().at("RANGE").at(Detector::NEUTRON2))]++;
-
-											nAC_n += col.Neutrons().at("RANGE").at(Detector::NEUTRON1);
-											nAC_n += col.Neutrons().at("RANGE").at(Detector::NEUTRON2);
-											nAC_range++;
-										}
-										else if (col.Scint() >= 1 && col.Neutrons().at("RANGE").at(Detector::NEUTRON2) >= 1) {
-											AC_Cluster[col.Neutrons().at("RANGE").at(Detector::NEUTRON2)]++;
-
-											nAC_n += col.Neutrons().at("RANGE").at(Detector::NEUTRON2);
-											nAC_range++;
-										}
-										else if (col.Scint() >= 1 && col.Neutrons().at("RANGE").at(Detector::NEUTRON1) >= 1) {
-											AC_Cluster[col.Neutrons().at("RANGE").at(Detector::NEUTRON1)]++;
-
-											nAC_n += col.Neutrons().at("RANGE").at(Detector::NEUTRON1);
-											nAC_range++;
-										}
-										nAC++;
-										trig2 = true;
-									} //time comparison
-								} //loop
-							} //for scint12
 						//------------------------------------------
 						}
 					}
 
-					map<Detector, vector<Event>> col_nRange = col.Neutr_events().at("RANGE");
-					for (const auto& vec : col_nRange) {
-						for (const auto& item : vec.second) {
-							SpectrumNeutronsRange.push_back(item.Ampl());
-						}
-					}
-
-					map<Detector, vector<Event>> col_neut = col.Neutr_events().at("TOTAL");
+					map<Detector, vector<Event>> col_neut = col.Neutr_events();
 					for (const auto& vec : col_neut) {
 						for (const auto& item : vec.second) {
 							SpectrumNeutrons.push_back(item.Ampl());
+							if (item.Ampl() > upperbnd) {
+								nNeutrons25++;
+							}
 						}
 					}
 
-					if (NeutronsInEvent.at("RANGE") > 1) {
+					if (NeutronsInEvent > 1) {
 						map<Detector, vector<Event>> colNeut = move(col_neut);
 						map<Detector, vector<Event>> colScint = col.Scint_events();
 						string Ndet = "";
 
-						fileMultN << "Выстрел " << col.Shot() << " с " << NeutronsInEvent.at("TOTAL")
-							<< " событиями с нейтронных "
+						fileMultN << "Выстрел " << col.Shot() << " с " << NeutronsInEvent << " событиями с нейтронных "
 							<< "и " << col.Scint() << " со сцинтилляционных детекторов\n";
-						fileMultN << "Из " << NeutronsInEvent.at("TOTAL") << " событий с нейтронных детекторов:\n"
-							<< "в пределах области обработки " << lowerbnd << " - " << upperbnd << " B: "
-							<< NeutronsInEvent.at("RANGE") << "\n" << "за пределами области обработки: "
-							<< NeutronsInEvent.at("OOR") << "\n" << "ниже порога (ошибка определения пиков): "
-							<< NeutronsInEvent.at("CRPT") << "\n";
-
 						fileMultN << "---------------------------------------------------\nСобытия на нейтронных детекторах: \n";
 						for (const auto& vec : colNeut) {
 							if (vec.first == Detector::NEUTRON2) {
@@ -341,7 +260,7 @@ void OpenSession(const double& lowerbnd, const double& upperbnd) {
 								<< "с " << vec.second.size() << " событиями" << endl;
 							fileMultN << setw(10) << "Ампл., V" << " " << setw(15) << "Время, мкс" << '\n';
 							for (const auto& item : vec.second) {
-								fileMultN << setw(10) << item.Ampl() << " " << setw(15) << (item.Time() - col.Trig()) << '\n';
+								fileMultN << setw(10) << item.Ampl() << " " << setw(15) << (item.Time() - col.Trig().at(vec.first)) << '\n';
 							}
 						}
 						fileMultN << "---------------------------------------------------\n";
@@ -365,7 +284,7 @@ void OpenSession(const double& lowerbnd, const double& upperbnd) {
 									trigDet = Detector::NEUTRON1;
 								}
 								for (const auto& item : vec.second) {
-									dt = item.Time() - col.Trig();
+									dt = item.Time() - col.Trig().at(trigDet);
 									fileMultN << setw(10) << item.Ampl() << " " << setw(15) << dt;
 									if (dt < 100 && dt > 0) {
 										if (vec.first == Detector::SCINT21 || vec.first == Detector::SCINT22) {
@@ -414,43 +333,17 @@ void OpenSession(const double& lowerbnd, const double& upperbnd) {
 
 			//Fill total information
 			if (events.size() > 0) {
-				double TrigFreq = (events.rbegin()->first) / SessionTime;
-				fileTotal.precision(3);
-				fileTotal << "Запусков: " << events.rbegin()->first << "; частота запусков: " 
-					<< TrigFreq << " Гц.\n";
-				//fileTotal.precision(ios::floatfield);
+				fileTotal << "Запусков: " << events.rbegin()->first << "; ";
 			}
-			fileTotal << "Нейтронов в диапазоне амплитуд " << lowerbnd << " - " << upperbnd << " В : " <<
-				nNeutrons.at("RANGE") << ",\n"
-				<< "с амплитудой выше " << upperbnd << " V: " << nNeutrons.at("OOR") << '\n';
-			fileTotal << "Из " << nNeutrons.at("TOTAL") << " событий с нейтронных детекторов:\n"
-				<< "в пределах области обработки " << lowerbnd << " - " << upperbnd << " B: "
-				<< nNeutrons.at("RANGE") << "\n" << "за пределами области обработки: "
-				<< nNeutrons.at("OOR") << "\n" << "ниже порога (ошибка определения пиков): "
-				<< nNeutrons.at("CRPT") << "\n";
+			fileTotal << "Нейтронов в диапазоне амплитуд " << lowerbnd << " - " << upperbnd << " В : " << nNeutrons << ",\n"
+				<< "с амплитудой выше " << upperbnd << " V: " << nNeutrons25 << '\n';
 			if (Cluster.size() > 0) {
-				fileTotal << "Событий по числу нейтронов в пределах обработки (до запрета):\n";
+				fileTotal << "Событий по числу нейтронов (до запрета):\n";
 				for (const auto& cl : Cluster) {
-					fileTotal<< setw(8);
 					fileTotal << cl.first << " ";
 				}
 				fileTotal << endl;
 				for (const auto& cl : Cluster) {
-					fileTotal << setw(8);
-					fileTotal << cl.second << " ";
-				}
-				fileTotal << endl;
-			}
-
-			if (clr_Cluster.size() > 0) {
-				fileTotal << "Событий по числу нейтронов (после запрета):\n";
-				for (const auto& cl : clr_Cluster) {
-					fileTotal << setw(8);
-					fileTotal << cl.first << " ";
-				}
-				fileTotal << endl;
-				for (const auto& cl : clr_Cluster) {
-					fileTotal << setw(8);
 					fileTotal << cl.second << " ";
 				}
 				fileTotal << endl;
@@ -459,28 +352,35 @@ void OpenSession(const double& lowerbnd, const double& upperbnd) {
 			if (AC_Cluster.size() > 0) {
 				fileTotal << "Запрещенных событий по числу нейтронов:\n";
 				for (const auto& cl : AC_Cluster) {
-					fileTotal << setw(8);
 					fileTotal << cl.first << " ";
 				}
 				fileTotal << endl;
 				for (const auto& cl : AC_Cluster) {
-					fileTotal << setw(8);
 					fileTotal << cl.second << " ";
 				}
 				fileTotal << endl;
 			}
 
-
+			if (clr_Cluster.size() > 0) {
+				fileTotal << "Событий по числу нейтронов (после запрета):\n";
+				for (const auto& cl : clr_Cluster) {
+					fileTotal << cl.first << " ";
+				}
+				fileTotal << endl;
+				for (const auto& cl : clr_Cluster) {
+					fileTotal << cl.second << " ";
+				}
+				fileTotal << endl;
+			}
 
 			fileTotal << "Событий на сцинтилляционных детекторах: " << nScint << '\n';
-			fileTotal << "запрещено всего " << nAC << " запусков, из них в пределах обработки "
-				<< nAC_range << " с " << nAC_n << " нейтронами" << '\n';
-			fileTotal << "Всего событий на нейтронных после запрета: " << nNeutrons.at("RANGE") - nAC_n << '\n';
+			fileTotal << "запрещено " << nAC << " запусков с " << nAC_n << " нейтронами" << '\n';
+			fileTotal << "Всего событий на нейтронных после запрета: " << nNeutrons - nAC_n << '\n';
 
 			//Fill histogram with times from neutron detector
 			//fileTotal << "Non-zero times for neutron detector: " << '\n';
 
-			Histo hTimesNeutron(TimesForNeutrons, -200.0, 1.2, 500);
+			Histo hTimesNeutron(TimesForNeutrons, -200.0, 0.1, 6000);
 			vector<double> hXNeutron = hTimesNeutron.showX();
 			vector<int> hYNeutron = hTimesNeutron.showY();
 			for (size_t i = 0; i < hTimesNeutron.nbins(); i++) {
@@ -493,19 +393,9 @@ void OpenSession(const double& lowerbnd, const double& upperbnd) {
 			Histo hTimesScint(TimesForScint, -200.0, 5, 120);
 			vector<double> hXScint = hTimesScint.showX();
 			vector<int> hYScint = hTimesScint.showY();
-			int NScintOf100 = 0;
 			for (size_t i = 0; i < hTimesScint.nbins(); i++) {
 				hTimeS << setw(10) << hXScint.at(i) << " " << setw(10) << hYScint.at(i) << '\n';
-				//100-us scint events
-				if (hXScint.at(i) == 95) {
-					NScintOf100 = hYScint.at(i);
-				}
 			}
-			double Scint100Freq = ((NScintOf100 / SessionTime) * 1000);
-			//fileTotal.precision(3);
-			fileTotal << "В пике +100 мкс для сцинтилляционного детектора: " << NScintOf100 << " событий\n"
-				<< "Частота таких событий: " << Scint100Freq << " мГц\n";
-			//fileTotal.precision(ios::floatfield);
 			//cout << "\n---------------------------------------------------\n";
 			Histo hSpectrumN(SpectrumNeutrons, 0., 0.012, 500);
 			vector<double> hXSN = hSpectrumN.showX();
@@ -513,20 +403,12 @@ void OpenSession(const double& lowerbnd, const double& upperbnd) {
 			for (size_t i = 0; i < hSpectrumN.nbins(); i++) {
 				hSpectrN << setw(10) << hXSN.at(i) << " " << setw(10) << hYSN.at(i) << '\n';
 			}
-			//cout << "\n---------------------------------------------------\n";
-			Histo hSpectrumNR(SpectrumNeutronsRange, 0., 0.012, 500);
-			vector<double> hXSNR = hSpectrumNR.showX();
-			vector<int> hYSNR = hSpectrumNR.showY();
-			for (size_t i = 0; i < hSpectrumNR.nbins(); i++) {
-				hSpectrNR << setw(10) << hXSNR.at(i) << " " << setw(10) << hYSNR.at(i) << '\n';
-			}
 
 			fileTotal.close();
 			hTimeN.close();
 			hTimeS.close();
 			fileMultN.close();
 			hSpectrN.close();
-			hSpectrNR.close();
 			cout << "Анализ файла завершен!\n";
 			cout << "---------------------------------------------------\n";
 		}

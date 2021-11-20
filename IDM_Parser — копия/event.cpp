@@ -182,72 +182,66 @@ CollectionOfEvents::CollectionOfEvents(const std::pair<size_t, std::vector<Event
 
 	bool trigFound2 = false;
 	bool trigFound1 = false;
-	bool trigScint = true;
-
 	for (const auto& event_ : col.second) {
 		if (event_.dType() == Detector::NEUTRON2) {
-			PutEventsInDetector(trigFound2, Detector::NEUTRON2, event_);
+			//set trigger time if not set;
+			if (!trigFound2) {
+				_trigger_time[Detector::NEUTRON2] = event_.Time();
+				trigFound2 = true;
+			}
+			//put all events to vector
+			neutr_events[Detector::NEUTRON2].push_back(event_);
+			_num_neutron[event_.dType()]++;
+			//put correct events within processing range
+			if (event_.Ampl() > lowerbnd && event_.Ampl() < upperbnd) {
+				neutr_events_wRange[Detector::NEUTRON2].push_back(event_);;
+				_num_neutron_wRange[event_.dType()]++;
+			}
+			//put events with exceeding amplitude
+			else if (event_.Ampl() >= upperbnd) {
+				neutr_events_OOR[Detector::NEUTRON2].push_back(event_);;
+				_num_neutron_OOR[event_.dType()]++;
+			}
+			//put "corrupted" events below threshold
+			else {
+				neutr_events_CRPT[Detector::NEUTRON2].push_back(event_);;
+				_num_neutron_CRPT[event_.dType()]++;
+			}
 		}
 		else if (event_.dType() == Detector::NEUTRON1) {
-			PutEventsInDetector(trigFound1, Detector::NEUTRON1, event_);
+			if (!trigFound1) {
+				_trigger_time[Detector::NEUTRON1] = event_.Time();
+				trigFound1 = true;
+			}
+			neutr_events[Detector::NEUTRON1].push_back(event_);
+			_num_neutron[event_.dType()]++;
 		}
 		else if (event_.dType() == Detector::SCINT21) {
-			PutEventsInDetector(trigScint, Detector::SCINT21, event_);
+			scint_events[Detector::SCINT21].push_back(event_);
+			_num_scint++;
 		}
 		else if (event_.dType() == Detector::SCINT22) {
-			PutEventsInDetector(trigScint, Detector::SCINT22, event_);
+			scint_events[Detector::SCINT22].push_back(event_);
+			_num_scint++;
 		}
 		else if (event_.dType() == Detector::SCINT11) {
-			PutEventsInDetector(trigScint, Detector::SCINT11, event_);
+			scint_events[Detector::SCINT11].push_back(event_);
+			_num_scint++;
 		}
 		else if (event_.dType() == Detector::SCINT12) {
-			PutEventsInDetector(trigScint, Detector::SCINT12, event_);
+			scint_events[Detector::SCINT12].push_back(event_);
+			_num_scint++;
 		}
 	}
-	if (_trigger_time.at(Detector::NEUTRON1) > 0 &&
-		_trigger_time.at(Detector::NEUTRON2) > 0) {
-		_trigger_time_start = min(_trigger_time.at(Detector::NEUTRON1), _trigger_time.at(Detector::NEUTRON2));
-	}
-	else {
-		_trigger_time_start = max(_trigger_time.at(Detector::NEUTRON1), _trigger_time.at(Detector::NEUTRON2));
-	}
-	
-
 }
 
-map<string, vector<double>> CollectionOfEvents::neutr_time() {
-	map<string, vector<double>> times = {
-					{"TOTAL", {}}, {"RANGE", {}}, {"OOR", {}}, {"CRPT", {}}
-	};
+vector<double> CollectionOfEvents::neutr_time() {
+	vector<double> times;
 	for (const auto& vec : neutr_events) {
 		for (const auto& item : vec.second) {
-			double nt = item.Time() - _trigger_time_start;
+			double nt = item.Time() - _trigger_time.at(vec.first);
 			if (nt != 0) {
-				times.at("TOTAL").push_back(move(nt));
-			}
-		}
-	}
-	for (const auto& vec : neutr_events_wRange) {
-		for (const auto& item : vec.second) {
-			double nt = item.Time() - _trigger_time_start;
-			if (nt != 0) {
-				times.at("RANGE").push_back(move(nt));
-			}
-		}
-	}
-	for (const auto& vec : neutr_events_OOR) {
-		for (const auto& item : vec.second) {
-			double nt = item.Time() - _trigger_time_start;
-			if (nt != 0) {
-				times.at("OOR").push_back(move(nt));
-			}
-		}
-	}
-	for (const auto& vec : neutr_events_CRPT) {
-		for (const auto& item : vec.second) {
-			double nt = item.Time() - _trigger_time_start;
-			if (nt != 0) {
-				times.at("CRPT").push_back(move(nt));
+				times.push_back(move(nt));
 			}
 		}
 	}
@@ -257,20 +251,22 @@ map<string, vector<double>> CollectionOfEvents::neutr_time() {
 vector<double> CollectionOfEvents::scint_time() {
 	vector<double> times;
 	for (const auto& vec : scint_events) {
-		if (_trigger_time_start != 0) {
-			for (const auto& item : vec.second) {
-				times.push_back(item.Time() - _trigger_time_start);
-			}
+		Detector trigDet = Detector::UNUSED;
+		if (vec.first == Detector::SCINT21 || vec.first == Detector::SCINT22) {
+			trigDet = Detector::NEUTRON2;
+		}
+		else if (vec.first == Detector::SCINT11 || vec.first == Detector::SCINT12) {
+			trigDet = Detector::NEUTRON1;
+		}
+		for (const auto& item : vec.second) {
+			times.push_back(item.Time() - _trigger_time.at(trigDet));
 		}
 	}
 	return times;
 }
 
-map<string, map<Detector, vector<Event>>> CollectionOfEvents::Neutr_events() const{
-	map<string, map<Detector, vector<Event>>> NE_map = {
-					{"TOTAL", neutr_events}, {"RANGE", neutr_events_wRange}, {"OOR", neutr_events_OOR}, {"CRPT", neutr_events_CRPT}
-	};
-	return NE_map;
+map<Detector, vector<Event>> CollectionOfEvents::Neutr_events() const{
+	return neutr_events;
 }
 
 map<Detector, vector<Event>> CollectionOfEvents::Scint_events() const{
@@ -281,20 +277,14 @@ size_t CollectionOfEvents::Shot() {
 	return _shot;
 }
 
-map<string, map<Detector, size_t>> CollectionOfEvents::Neutrons() {
-	map<string, map<Detector, size_t>> NE_map = {
-		{"TOTAL", _num_neutron},
-		{"RANGE", _num_neutron_wRange},
-		{"OOR", _num_neutron_OOR},
-		{"CRPT", _num_neutron_CRPT}
-	};
-	return NE_map;
+map <Detector, size_t> CollectionOfEvents::Neutrons() {
+	return _num_neutron;
 }
 
 size_t CollectionOfEvents::Scint() {
 	return _num_scint;
 }
 
-double CollectionOfEvents::Trig() {
-	return _trigger_time_start;
+map<Detector, double> CollectionOfEvents::Trig() {
+	return _trigger_time;
 }
