@@ -1,6 +1,7 @@
 #include "commands.h"
 #include "files.h"
 
+#include <iostream>
 #include <iomanip>
 
 using namespace std;
@@ -196,27 +197,63 @@ void OpenSession(const double& lowerbnd, const double& upperbnd) {
 					vector<double> col_nt = col.neutr_time().at("RANGE");
 					TimesForNeutrons.insert(TimesForNeutrons.end(), col_nt.begin(), col_nt.end());
 					//add number of neutrons for every case
+					bool is_fault = 0;
+					int is_ok_n = 0;
+					int nbad = 0;
 					for (const auto& item : NeutronsInEvent) {
-						if (item.first == "RANGE" &&
-							col.Neutrons().at("CRPT").at(Detector::NEUTRON1) == 0 &&
-							col.Neutrons().at("CRPT").at(Detector::NEUTRON2) == 0 && col.Trig() > 0) {
-							nNeutrons.at(item.first) += item.second;
+						if (item.first == "RANGE") {
+							vector<Event> ncd;
+							map <Detector, vector<Event>> e1 = col.Neutr_events().at("RANGE");
+							bool is_nok = false;
+
+							if (e1.find(Detector::NEUTRON1) != e1.end()) {
+								for (const auto& ev : e1.at(Detector::NEUTRON1)) {
+									ncd.push_back(ev);
+								}
+							}
+							if (e1.find(Detector::NEUTRON2) != e1.end()) {
+								for (auto& ev : e1.at(Detector::NEUTRON2)) {
+									ncd.push_back(ev);
+								}
+							}
+							if (ncd.size() > 0) {
+								for (const auto& item : ncd) {
+									if ((item.Time() - col.Trig()) > 0.0001 && (item.Time() - col.Trig()) < 2.) {
+										is_fault = true;
+										is_nok = true;
+										nbad++;
+									}
+								}
+							}
+							if (item.first == "RANGE" &&
+								col.Neutrons().at("CRPT").at(Detector::NEUTRON1) == 0 &&
+								col.Neutrons().at("CRPT").at(Detector::NEUTRON2) == 0 && col.Trig() > 0
+								) {
+								nNeutrons.at(item.first) += (item.second - nbad);
+								nNeutrons.at("CRPT") += nbad;
+							}
+							else if (item.first == "RANGE" || is_fault) {
+								nNeutrons.at("CRPT") += nbad;
+							}
+
+							is_ok_n = NeutronsInEvent.at("TOTAL") - nbad;
 						}
-						else if (item.first == "RANGE") {
-							nNeutrons.at("CRPT") += item.second;
+						
+						else if (item.first == "TOTAL") {
+							nNeutrons.at(item.first) += item.second;
 						}
 						else {
 							nNeutrons.at(item.first) += item.second;
 						}
-
 					}
 					if ((col.Neutrons().at("RANGE").at(Detector::NEUTRON1) > 0 ||
 						col.Neutrons().at("RANGE").at(Detector::NEUTRON2) > 0) &&
 						col.Neutrons().at("CRPT").at(Detector::NEUTRON1) == 0 &&
 						col.Neutrons().at("CRPT").at(Detector::NEUTRON2) == 0 && col.Trig() > 0) {
-
-						Cluster[(col.Neutrons().at("RANGE").at(Detector::NEUTRON1) +
-							col.Neutrons().at("RANGE").at(Detector::NEUTRON2))]++;
+						if (is_ok_n > 0) {
+							Cluster[is_ok_n]++;
+						}
+						
 
 					}
 
@@ -304,9 +341,13 @@ void OpenSession(const double& lowerbnd, const double& upperbnd) {
 					map<Detector, vector<Event>> col_nRange = col.Neutr_events().at("RANGE");
 					for (const auto& vec : col_nRange) {
 						for (const auto& item : vec.second) {
-							SpectrumNeutronsRange.push_back(item.Ampl());
+							if (!(item.Time() - col.Trig()) > 0.000001 && (item.Time() - col.Trig()) < 2.){
+								SpectrumNeutronsRange.push_back(item.Ampl());
+							}
 						}
+						
 					}
+					//nNeutrons.at("RANGE") = col_nRange.at(Detector::NEUTRON1).size() + col_nRange.at(Detector::NEUTRON2).size();
 
 					map<Detector, vector<Event>> col_neut = col.Neutr_events().at("TOTAL");
 					for (const auto& vec : col_neut) {
@@ -314,6 +355,8 @@ void OpenSession(const double& lowerbnd, const double& upperbnd) {
 							SpectrumNeutrons.push_back(item.Ampl());
 						}
 					}
+					//nNeutrons.at("TOTAL") = col_neut.at(Detector::NEUTRON1).size() + col_neut.at(Detector::NEUTRON2).size();
+
 
 					if (NeutronsInEvent.at("RANGE") > 1) {
 						map<Detector, vector<Event>> colNeut = move(col_neut);
@@ -345,6 +388,7 @@ void OpenSession(const double& lowerbnd, const double& upperbnd) {
 							}
 						}
 						fileMultN << "---------------------------------------------------\n";
+						fileMultN << "fault " << is_fault << endl;
 						if (col.Scint() > 0) {
 							fileMultN << "—обыти€ на сцинтилл€ционных: \n";
 
